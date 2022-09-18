@@ -1,0 +1,7 @@
+venv
+
+camera/__pycache__
+__pycache__
+.idea
+
+img/test.png
