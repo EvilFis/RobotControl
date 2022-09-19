@@ -1,3 +1,5 @@
+import math
+
 def get_frame_keypoints(landmarks, frame):
     frame_keypoints = []
     for ldm in landmarks:
@@ -16,7 +18,7 @@ def orientation(cord_wrist, cord_middle_mcp):
     x_middle_mcp, y_middle_mcp = cord_middle_mcp[0], cord_middle_mcp[1]
 
     if abs(x_middle_mcp - x_wrist) < 0.05:
-        m = 1000000000
+        m = 1
     else:
         m = abs((y_middle_mcp - y_wrist) / (x_middle_mcp - x_wrist))
 
@@ -31,6 +33,7 @@ def orientation(cord_wrist, cord_middle_mcp):
             return 'U'
         else:
             return 'D'
+
 
 
 # Поиск большого пальца
@@ -65,3 +68,16 @@ def find_thumb(keypoints, label, rotation, thumb=4, wrist_p=0):
             side = False
 
     return status, side
+
+
+def get_alpha(img_bgra):
+    return img_bgra[:, :, 3] / 255
+
+
+def get_background_img(background, img_png, alpha_background, alpha_foreground):
+    for color in range(0, 3):
+        # Жесты
+        background[:, :, color] = alpha_foreground * img_png[:, :, color] + \
+                                  alpha_background * background[:, :, color] * (1 - alpha_foreground)
+
+    return background
