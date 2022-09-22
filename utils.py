@@ -1,5 +1,6 @@
 import math
 
+
 def get_frame_keypoints(landmarks, frame):
     frame_keypoints = []
     for ldm in landmarks:
@@ -35,7 +36,6 @@ def orientation(cord_wrist, cord_middle_mcp):
             return 'D'
 
 
-
 # Поиск большого пальца
 def find_thumb(keypoints, label, rotation, thumb=4, wrist_p=0):
     status = False
@@ -68,16 +68,3 @@ def find_thumb(keypoints, label, rotation, thumb=4, wrist_p=0):
             side = False
 
     return status, side
-
-
-def get_alpha(img_bgra):
-    return img_bgra[:, :, 3] / 255
-
-
-def get_background_img(background, img_png, alpha_background, alpha_foreground):
-    for color in range(0, 3):
-        # Жесты
-        background[:, :, color] = alpha_foreground * img_png[:, :, color] + \
-                                  alpha_background * background[:, :, color] * (1 - alpha_foreground)
-
-    return background

@@ -1,44 +1,48 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+import time
 
 from camera import Camera
 import utils
 
 
 def main():
+    # Настройка распознование рук
     mp_hands = mp.solutions.hands
     hand = mp_hands.Hands(max_num_hands=1,
                           min_detection_confidence=0.7,
                           min_tracking_confidence=0.7)
 
+    # Получаем видеопоток
     video_getter = Camera(0, 1280, 720).start()
 
+    # Выписываем индексы необходимых пальцев
     finger_tips = [mp_hands.HandLandmark.INDEX_FINGER_TIP, mp_hands.HandLandmark.MIDDLE_FINGER_TIP,
                    mp_hands.HandLandmark.RING_FINGER_TIP, mp_hands.HandLandmark.PINKY_TIP]
-
-    finger_thumb = mp_hands.HandLandmark.THUMB_TIP
     wrist = mp_hands.HandLandmark.WRIST
     finger_middle_mcp = mp_hands.HandLandmark.MIDDLE_FINGER_MCP
 
-    like = cv2.imread('./img/like.png', cv2.IMREAD_UNCHANGED)
-    dislike = cv2.imread('./img/dislike.png', cv2.IMREAD_UNCHANGED)
-    peace = cv2.imread('./img/peace.png', cv2.IMREAD_UNCHANGED)
-    fuck = cv2.imread('./img/fuck.png', cv2.IMREAD_UNCHANGED)
-    stop = cv2.imread('./img/stop.png', cv2.IMREAD_UNCHANGED)
-    dont_see = cv2.imread('./img/dontSee.png', cv2.IMREAD_UNCHANGED)
+    # Загрузка изображений для дальнейшей подстановки
+    like = cv2.imread('./img/like.png')
+    dislike = cv2.imread('./img/dislike.png')
+    peace = cv2.imread('./img/peace.png')
+    fuck = cv2.imread('./img/fuck.png')
+    stop = cv2.imread('./img/stop.png')
 
-    test = cv2.imread('./img/test.png')
+    # Делаем скрин первого кадра
+    bad_person = cv2.resize(video_getter.frame, (499, 363))
 
-    bad_person = cv2.resize(cv2.cvtColor(video_getter.frame, cv2.COLOR_RGB2BGRA), (499, 363))
+    save_code = ''  # Вспомогательная переменная
 
     while True:
-        frame_cap_flag = False
-        background = cv2.imread('./img/CameraBackground2.png', cv2.IMREAD_UNCHANGED)
-        png = dont_see
+
+        start_time = time.time()
+
+        background = cv2.imread('./img/dontSee.png')
+        code = '-1\n'
 
         # Настройка жестов
-        gesture = ''
         finger_count = 0
         finger_status = {'THUMB': False,
                          "INDEX": False,
@@ -49,25 +53,23 @@ def main():
         # Прослушка клавиш
         key = cv2.waitKey(1) & 0xFF
 
-        # Перевод заднего изображения в BGRA
-        background = cv2.cvtColor(background, cv2.COLOR_BGR2BGRA)
-
         # read image
         frame = cv2.cvtColor(cv2.flip(video_getter.frame, 1), cv2.COLOR_BGR2RGB)
-        frame = cv2.resize(frame, (1270, 710))
 
-        results = hand.process(frame)
+        detection_region = frame[0:450, 720:1280]
+
+        results = hand.process(detection_region)
         hand_landmarks = results.multi_hand_landmarks
 
         if hand_landmarks:
             hand_label = results.multi_handedness[0].classification[0].label
-            frame_k = utils.get_frame_keypoints(hand_landmarks, frame)
+            frame_k = utils.get_frame_keypoints(hand_landmarks, detection_region)
 
             for connect in mp_hands.HAND_CONNECTIONS:
-                cv2.line(frame, frame_k[connect[0]], frame_k[connect[1]], (255, 255, 255), 2)
+                cv2.line(detection_region, frame_k[connect[0]], frame_k[connect[1]], (255, 255, 255), 2)
 
             for center in frame_k:
-                cv2.circle(frame, center, 3, (0, 0, 255), cv2.FILLED)
+                cv2.circle(detection_region, center, 3, (0, 0, 255), cv2.FILLED)
 
             rotation_hand = utils.orientation(frame_k[wrist], frame_k[finger_middle_mcp])
 
@@ -95,84 +97,81 @@ def main():
             # Find gesture
             # Peace
             if finger_count == 2 and finger_status['MIDDLE'] and finger_status['INDEX'] and rotation_hand == 'U':
-                gesture = 'Peace'
-                png = peace
+                background = peace
+                code = '3\n'
 
             # Bad finger
             elif 1 <= finger_count <= 2 and finger_status['MIDDLE'] and rotation_hand == 'U':
-                gesture = ':('
-                png = fuck
-
+                background = fuck
                 bad_person = frame
-                frame_cap_flag = True
 
                 # Все координаты по оси Х и У
                 all_x = [i[0] for i in frame_k]
                 all_y = [i[1] for i in frame_k]
-                cv2.rectangle(bad_person, (min(all_x) - 30, min(all_y) - 20), (max(all_x) + 30, max(all_y) + 20),
+                cv2.rectangle(detection_region, (min(all_x) - 30, min(all_y) - 20), (max(all_x) + 30, max(all_y) + 20),
                               (0, 0, 0), cv2.FILLED)
 
+                bad_person = cv2.cvtColor(bad_person, cv2.COLOR_RGB2BGR)
                 bad_person = cv2.resize(bad_person, (499, 363))
+                code = '4\n'
 
             # like
             elif finger_count == 1 and finger_status['THUMB'] and rotation_hand == 'R' and hand_label == 'Right' \
                     and side or finger_count == 1 and finger_status['THUMB'] and rotation_hand == 'L' \
                     and hand_label == 'Right' and side:
-
-                gesture = 'It\'s like :D'
-                png = like
+                background = like
+                code = '1\n'
 
             # dislike
             elif finger_count == 1 and finger_status['THUMB'] and rotation_hand == 'R' and hand_label == 'Right' \
                     and not side or finger_count == 1 and finger_status['THUMB'] and rotation_hand == 'L' \
                     and hand_label == 'Right' and not side:
-
-                gesture = 'It\'s dislike :<'
-                png = dislike
+                background = dislike
+                code = '2\n'
 
             # like
             elif finger_count == 1 and finger_status['THUMB'] and rotation_hand == 'R' and hand_label == 'Left' \
                     and not side or finger_count == 1 and finger_status['THUMB'] and rotation_hand == 'L' \
                     and hand_label == 'Left' and not side:
-
-                gesture = 'It\'s like :D'
-                png = like
+                background = like
+                code = '1\n'
 
             # dislike
             elif finger_count == 1 and finger_status['THUMB'] and rotation_hand == 'R' and hand_label == 'Left' \
                     and side or finger_count == 1 and finger_status['THUMB'] and rotation_hand == 'L' \
                     and hand_label == 'Left' and side:
-
-                gesture = 'It\'s dislike :<'
-                png = dislike
+                background = dislike
+                code = '2\n'
 
             # Stop
             elif finger_count == 5 and rotation_hand == 'U' and side:
-                gesture = 'Stop'
-                png = stop
+                background = stop
+                code = '0\n'
 
-            cv2.putText(frame, f'Label: {hand_label}', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-            cv2.putText(frame, f'Gesture: {gesture}', (50, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-            cv2.putText(frame, f"Finger_counts: {finger_count}", (50, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0),
-                        2)
-            cv2.putText(frame, f'Rotate: {rotation_hand}', (50, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+            # Отправка данных на сервер
+            if code != save_code and code != '-1\n':
+                cv2.putText(frame, f'Pernul {code}', (400, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+                save_code = code
 
-        # Подстановка изображений на задний фон
-        alpha_background = utils.get_alpha(background)
-        alpha_foreground = utils.get_alpha(png)
-        background = utils.get_background_img(background, png, alpha_background, alpha_foreground)
+        # Если рука не распознана, то отправляем -1
+        elif code != save_code and code == '-1\n':
+            cv2.putText(frame, f'Pernul ne to', (400, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+            save_code = code
+
+        # FPS
+        cv2.putText(frame, f'{int(1 / (time.time() - start_time))}', (50, 100), cv2.FONT_HERSHEY_COMPLEX, 2,
+                    (255, 0, 0), 1)
 
         # Paste frame
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGRA)
+        frame = cv2.resize(frame, (1270, 710))
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         background[166:166 + 710, 45:45 + 1270] = frame
+        background[513:513 + 363, 1358:1358 + 499] = bad_person
 
-        if frame_cap_flag:
-            bad_person = cv2.cvtColor(bad_person, cv2.COLOR_RGB2BGRA)
-
-        background[513:513+363, 1358:1358+499] = bad_person
+        cv2.line(background, (760, 166), (760, 615), color=(255, 0, 0), thickness=2)
+        cv2.line(background, (760, 615), (1314, 615), color=(255, 0, 0), thickness=2)
 
         # Full screen
-        background = cv2.cvtColor(background, cv2.COLOR_BGRA2BGR)
         cv2.namedWindow("Robot control", cv2.WND_PROP_FULLSCREEN)
         cv2.setWindowProperty("Robot control", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         cv2.imshow('Robot control', background)
